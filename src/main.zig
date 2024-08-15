@@ -21,6 +21,18 @@ pub fn printWord(word: []const u8) !void {
     }
 }
 
+// converts a time.timestamp() i64 to a human readable string
+pub fn convertTimestamp(timestamp: i64) ![]const u8 {
+    const eSeconds = time.epoch.EpochSeconds{ .secs = @intCast(timestamp) };
+    // convert the timestamp to a readable format
+    const eDayCreationTime = time.epoch.EpochSeconds.getEpochDay(eSeconds).calculateYearDay();
+    const creationMonth = try findMonth(eDayCreationTime.calculateMonthDay().month);
+    const creationDay = eDayCreationTime.calculateMonthDay().day_index;
+    const creationYear = eDayCreationTime.year;
+    var formattingBuffer: [20]u8 = undefined;
+    return try std.fmt.bufPrint(&formattingBuffer, "{s} {d} {d}", .{ creationMonth, creationDay, creationYear });
+}
+
 pub fn listTasks(file: []const u8) !void {
     // open csv
     const currentfile = try std.fs.cwd().openFile(file, .{});
@@ -44,6 +56,7 @@ pub fn listTasks(file: []const u8) !void {
 }
 
 pub fn addTask(file: []const u8) !void {
+    // TODO: this should be moved to a higher scope postion
     // open csv with the mode set to read_write
     const currentfile = try std.fs.cwd().openFile(file, .{ .mode = .read_write });
     // defer closing
@@ -55,15 +68,12 @@ pub fn addTask(file: []const u8) !void {
     // get the generic writer from buffered writer (idk why we need to do this)
     var out_stream = buf_writer.writer();
 
-    // get a timestamp and make it human readable
     // get unix timestamp in seconds
     const creationTimeStamp = time.timestamp();
-    const eSeconds = time.epoch.EpochSeconds{ .secs = @intCast(creationTimeStamp) };
-    // convert the timestamp to a readable format
-    const eDayCreationTime = time.epoch.EpochSeconds.getEpochDay(eSeconds).calculateYearDay();
-    const creationMonth = findMonth(eDayCreationTime.calculateMonthDay().month);
-    _ = creationMonth; // autofix
-    // TODO: also get the dayindex from eDayCreationTime.calculateMonthDay().month.day_index and year from eDayCreationtime.year
+    // this timestamp is used to show to the user, we write the above timestamp to the file
+    const formattedTimeStamp = convertTimestamp(creationTimeStamp);
+
+    // get the ID of the new item
 
     // create a stdin reader and writer to read and write to and from the terminal
     const stdin = std.io.getStdIn().reader();
@@ -77,30 +87,81 @@ pub fn addTask(file: []const u8) !void {
         // only write to the file if the user entered something
         if (user_input.len >= 1) {
             // write a validation message to the user with their task
-            try stdout.print("Task: {s}!\n", .{user_input});
+            try stdout.print("Task: {s}! at time {s}\n", .{ user_input, formattedTimeStamp });
 
             // trim any trailing newline
             const trimmed_output = std.mem.trimRight(u8, user_input, "\r\n");
             var newLineBuffer: [150]u8 = undefined; // trying this length and i'll adjust the size if necessary
-            const newTaskLine = try std.fmt.bufPrint(&newLineBuffer, "{s}\t\t{any}!", .{ trimmed_output, eDayCreationTime.calculateMonthDay() });
+            // get ID
+            const newTaskLine = try std.fmt.bufPrint(&newLineBuffer, "{s}\t\t{d}", .{ trimmed_output, creationTimeStamp });
 
             // write the trimmed output to the file
             try out_stream.print("\n{s}", .{newTaskLine});
         } else {
             // if the user didnt provide a task, then inform the user of this.
             std.debug.print("No task provided, try again.", .{});
+            // TODO: invalidCommand should be ran after this, here or repl
         }
     }
     // flush the writer (the writer is like a cache that must be cleared)
     try buf_writer.flush();
 }
 
-pub fn findMonth(month: std.time.epoch.Month) ![]u8 {
-    _ = month; // autofix
-    // switchcase to return the []u8 array of a month
+// switchcase to return the string name of a month
+pub fn findMonth(month: std.time.epoch.Month) ![]const u8 {
+    switch (month) {
+        .jan => {
+            return "January";
+        },
+        .feb => {
+            return "February";
+        },
+        .mar => {
+            return "March";
+        },
+        .apr => {
+            return "April";
+        },
+        .may => {
+            return "May";
+        },
+        .jun => {
+            return "June";
+        },
+        .jul => {
+            return "July";
+        },
+        .aug => {
+            return "August";
+        },
+        .sep => {
+            return "September";
+        },
+        .oct => {
+            return "October";
+        },
+        .nov => {
+            return "November";
+        },
+        .dec => {
+            return "December";
+        },
+    }
+}
+
+// this will be ran when an invalid command is ran
+pub fn invalidCommand() void {}
+
+// Gets the last ID in the file as a string
+pub fn getLastId(file: []const u8) ![]const u8 {
+    _ = file; // autofix
+
 }
 
 pub fn main() !void {
+    // first open the file
+    // read the items and translate them into tasks
+    // TODO: finish doc'ing out the scaffold for how the app flow should work and execute
     try addTask("src/data.csv");
     try listTasks("src/data.csv");
 }
