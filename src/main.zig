@@ -6,6 +6,7 @@ const time = std.time;
 // list <optional all> {lists incomplete tasks by default}
 // complete <id>
 // delete <id>
+// help command to list commands and a command as an argument for command useage
 
 const Task = struct { ID: u8, TaskDescription: []u8, Creation: std.time.Timer, Completed: bool };
 
@@ -153,14 +154,29 @@ pub fn findMonth(month: std.time.epoch.Month) ![]const u8 {
 pub fn invalidCommand() void {}
 
 // Gets the last ID in the file as a string
-pub fn getLastId(file: []const u8) ![]const u8 {
-    _ = file; // autofix
+pub fn getLastId(tasks: []Task) ![]const u8 {
+    _ = tasks; // autofix
 
 }
 
 pub fn main() !void {
+    // TODO: init
     // first open the file
-    // read the items and translate them into tasks
+    // read the items and translate them into task structs
+    // call the getLastId function or equivalent
+    // determie if the user used a repl or a command
+
+    // command: TODO: determine what command was entered
+    // parse the argument if any, and compute the result
+
+    // repl: TODO: begin loop
+    // set exit condition, ex: `exit`, `quit` etc.
+    // send prompt, ex: `>>>` or `task >>>`
+    // use stdin and stdout and take input and write to terminal
+    // process input command
+    // if no command then tell user help and exit commands
+    // repeat loop
+
     // TODO: finish doc'ing out the scaffold for how the app flow should work and execute
     try addTask("src/data.csv");
     try listTasks("src/data.csv");
