@@ -2,8 +2,8 @@ const std = @import("std");
 const time = std.time;
 
 // should be able to take the following commands:
-// add <task string arg>
-// list <optional all> {lists incomplete tasks by default}
+// add <task string>
+// list [--all] [--item <id>]{lists incomplete tasks by default}
 // complete <id>
 // delete <id>
 // help command to list commands and a command as an argument for command useage
@@ -188,21 +188,50 @@ pub fn main() !void {
     // std.debug.print("List: {}\n", .{list.value});
 
     while (args.next()) |arg| {
-        if (std.mem.eql(u8, arg, "list")) { // if arg list
+        if (std.mem.eql(u8, arg, "list")) { // if arg == list
             // could do func to handle list or handle
-            while (args.next()) |innerArg1| {
-                if (std.mem.eql(u8, innerArg1[0..2], "--")) {
-                    // determine command arg here, `all` or `item`
-                    if (std.mem.eql(u8, innerArg1[2..6], "all")) {
-                        // list all here
-                    } else if (std.mem.eql(u8, innerArg1[2..7], "item")) {
-                        while (args.next()) |innerArg2| {
-                            _ = innerArg2; // autofix
-                            // attempt to use arg to find a specific item in the array
+            if (args.next()) {
+                while (args.next()) |innerArg1| {
+                    if (std.mem.eql(u8, innerArg1[0..2], "--")) { //TODO: this could be standardized for every command argument
+                        // determine command arg here, `all` or `item`
+                        if (std.mem.eql(u8, innerArg1[2..6], "all")) {
+                            //TODO: list all here
+                        } else if (std.mem.eql(u8, innerArg1[2..7], "item")) {
+                            while (args.next()) |innerArg2| {
+                                std.debug.print("{s}", .{innerArg2});
+                                //TODO: attempt to use arg to find a specific item in the array
+                                //TODO: something like: const item = findItem(taskArray, innerArg2)
+                            }
+                        } else {
+                            //TODO: here the user entered `--` but no valid command, throw `help list`
                         }
                     }
                 }
+            } else {
+                //TODO: here no arguements were provided so we just list the incomplete items
             }
+        } else if (std.mem.eql(u8, arg, "add")) { // if arg == add
+            //TODO: check if theres an additional arg and make a new task and add that to the array
+            //TODO: otherwise throw `help add`
+        } else if (std.mem.eql(u8, arg, "delete")) { // if arg == delete
+            //TODO: check if theres an additional arg and check if its a valid ID then delete from the array
+            //TODO: if an ID is provided and its invalid throw invalid ID message
+            //TODO: otherwise no ID provided, throw `help delete`
+        } else if (std.mem.eql(u8, arg, "complete")) { // if arg == complete
+            //TODO: check if theres an additional arg and check if its a valid ID then change the bool flag to true
+            //TODO: if an ID is provided and its invalid throw invalid ID message
+            //TODO: otherwise no ID provided, throw `help delete`
+        } else if (std.mem.eql(u8, arg, "help")) { // if arg == help
+            //TODO: check if theres an additional arg
+            if (args.next()) {
+                // TODO:check which subcommand is listed, similar to the checking on the higher scope of this check
+                // TODO:then throw each commands help message
+                // TODO: otherwise throw command not found and simple help useage
+            } else {
+                //TODO: list basic help command
+            }
+        } else {
+            // TODO: list basic help command
         }
     }
 }
