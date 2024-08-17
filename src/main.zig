@@ -178,6 +178,31 @@ pub fn main() !void {
     // repeat loop
 
     // TODO: finish doc'ing out the scaffold for how the app flow should work and execute
-    try addTask("src/data.csv");
-    try listTasks("src/data.csv");
+    // try addTask("src/data.csv");
+    // try listTasks("src/data.csv");
+    var args = std.process.args();
+    _ = args.skip(); // Skip the program name
+    // const list = std.flag.Int("list", .{ .help = "List the created tasks", .useage = "`list` - lists uncomplete tasks by default.\n`list --all` - lists all tasks." });
+
+    // _ = try std.flag.parse(std.process.args());
+    // std.debug.print("List: {}\n", .{list.value});
+
+    while (args.next()) |arg| {
+        if (std.mem.eql(u8, arg, "list")) { // if arg list
+            // could do func to handle list or handle
+            while (args.next()) |innerArg1| {
+                if (std.mem.eql(u8, innerArg1[0..2], "--")) {
+                    // determine command arg here, `all` or `item`
+                    if (std.mem.eql(u8, innerArg1[2..6], "all")) {
+                        // list all here
+                    } else if (std.mem.eql(u8, innerArg1[2..7], "item")) {
+                        while (args.next()) |innerArg2| {
+                            _ = innerArg2; // autofix
+                            // attempt to use arg to find a specific item in the array
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
