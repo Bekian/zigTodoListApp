@@ -8,8 +8,23 @@ const time = std.time;
 // delete <id>
 // help command to list commands and a command as an argument for command useage
 
-const Task = struct { ID: u8, TaskDescription: []u8, Creation: std.time.Timer, Completed: bool };
+const Task = struct { ID: u8, TaskDescription: []const u8, Creation: i64, Completed: bool };
 
+pub fn checkBool(inputString: []const u8) !bool {
+    // Should NOT equal anything else besides these 2 values
+    if (std.mem.eql(u8, inputString, "True")) {
+        return true;
+    } else if (std.mem.eql(u8, inputString, "False")) {
+        return false;
+    } else {
+        // if the value is not one of these then theres a parsing error
+        // tell user then crash
+        std.debug.print("\n PROCCESSING ERROR: condition value invalid. Verify your source file is the correct structure.", .{});
+        return error.ConditionValueInvalid;
+    }
+}
+
+// TODO: will be refactored or removed
 pub fn printWord(word: []const u8) !void {
     if (word.len >= 20) {
         std.debug.print("{s}\t", .{word});
@@ -34,6 +49,7 @@ pub fn convertTimestamp(timestamp: i64) ![]const u8 {
     return try std.fmt.bufPrint(&formattingBuffer, "{s} {d} {d}", .{ creationMonth, creationDay, creationYear });
 }
 
+// TODO: will be refactored
 pub fn listTasks(file: []const u8) !void {
     // open csv
     const currentfile = try std.fs.cwd().openFile(file, .{});
@@ -56,6 +72,7 @@ pub fn listTasks(file: []const u8) !void {
     }
 }
 
+// TODO: will be refactored
 pub fn addTask(file: []const u8) !void {
     // TODO: this should be moved to a higher scope postion
     // open csv with the mode set to read_write
@@ -159,12 +176,59 @@ pub fn getLastId(tasks: []Task) ![]const u8 {
 
 }
 
+// TODO: Currently in progress
+pub fn processTasks(fileName: std.fs.File) ![]Task {
+    // reader
+    var buf_reader = std.io.bufferedReader(fileName.reader());
+    var in_stream = buf_reader.reader();
+    const taskArray: []Task = undefined;
+
+    // read and process the lines using the above reader
+    var buf: [1024]u8 = undefined;
+    std.debug.print("\n", .{});
+    while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
+        // TODO: how do i know what the first row is?
+        std.debug.print("{s}\n", .{line});
+        // split line into fields
+        var iter = std.mem.splitSequence(u8, line, ",");
+        var taskNumber: usize = 0;
+        var taskRow: [4][]const u8 = undefined;
+        var i: usize = 0;
+        while (iter.next()) |word| {
+            if (!(std.mem.eql(u8, word, "ID")) or !(std.mem.eql(u8, word, "Task")) or !(std.mem.eql(u8, word, "Date")) or !(std.mem.eql(u8, word, "completed"))) {
+                taskRow[i] = word;
+                i += 1;
+                if (i >= 4) {
+                    std.debug.print("\n PROCCESSING ERROR: index out of range. Verify your source file is the correct structure.", .{});
+                    unreachable;
+                }
+            }
+        }
+
+        const taskId = taskRow[0];
+        const description = taskRow[1];
+        const creationTime = try std.fmt.parseInt(i64, taskRow[2], 10);
+
+        const initialCompletionStatus = try checkBool(taskRow[3]);
+        const newItem = Task{ .ID = try std.fmt.parseInt(u8, taskId, 10), .TaskDescription = description, .Creation = creationTime, .Completed = initialCompletionStatus };
+        taskArray[taskNumber] = newItem;
+        taskNumber += 1;
+    }
+    return taskArray;
+}
+
 pub fn main() !void {
     // TODO: init
     // first open the file
     // read the items and translate them into task structs
     // call the getLastId function or equivalent
     // determie if the user used a repl or a command
+    // open csv with the mode set to read_write
+    const currentfile = try std.fs.cwd().openFile("src/data.csv", .{ .mode = .read_write });
+    // defer closing
+    defer currentfile.close();
+    const taskList = try processTasks(currentfile); //TODO: temp const; change back to var
+    _ = taskList; // autofix
 
     // command: TODO: determine what command was entered
     // parse the argument if any, and compute the result
@@ -187,51 +251,51 @@ pub fn main() !void {
     // _ = try std.flag.parse(std.process.args());
     // std.debug.print("List: {}\n", .{list.value});
 
-    while (args.next()) |arg| {
-        if (std.mem.eql(u8, arg, "list")) { // if arg == list
-            // could do func to handle list or handle
-            if (args.next()) {
-                while (args.next()) |innerArg1| {
-                    if (std.mem.eql(u8, innerArg1[0..2], "--")) { //TODO: this could be standardized for every command argument
-                        // determine command arg here, `all` or `item`
-                        if (std.mem.eql(u8, innerArg1[2..6], "all")) {
-                            //TODO: list all here
-                        } else if (std.mem.eql(u8, innerArg1[2..7], "item")) {
-                            while (args.next()) |innerArg2| {
-                                std.debug.print("{s}", .{innerArg2});
-                                //TODO: attempt to use arg to find a specific item in the array
-                                //TODO: something like: const item = findItem(taskArray, innerArg2)
-                            }
-                        } else {
-                            //TODO: here the user entered `--` but no valid command, throw `help list`
-                        }
-                    }
-                }
-            } else {
-                //TODO: here no arguements were provided so we just list the incomplete items
-            }
-        } else if (std.mem.eql(u8, arg, "add")) { // if arg == add
-            //TODO: check if theres an additional arg and make a new task and add that to the array
-            //TODO: otherwise throw `help add`
-        } else if (std.mem.eql(u8, arg, "delete")) { // if arg == delete
-            //TODO: check if theres an additional arg and check if its a valid ID then delete from the array
-            //TODO: if an ID is provided and its invalid throw invalid ID message
-            //TODO: otherwise no ID provided, throw `help delete`
-        } else if (std.mem.eql(u8, arg, "complete")) { // if arg == complete
-            //TODO: check if theres an additional arg and check if its a valid ID then change the bool flag to true
-            //TODO: if an ID is provided and its invalid throw invalid ID message
-            //TODO: otherwise no ID provided, throw `help delete`
-        } else if (std.mem.eql(u8, arg, "help")) { // if arg == help
-            //TODO: check if theres an additional arg
-            if (args.next()) {
-                // TODO:check which subcommand is listed, similar to the checking on the higher scope of this check
-                // TODO:then throw each commands help message
-                // TODO: otherwise throw command not found and simple help useage
-            } else {
-                //TODO: list basic help command
-            }
-        } else {
-            // TODO: list basic help command
-        }
-    }
+    // while (args.next()) |arg| {
+    //     if (std.mem.eql(u8, arg, "list")) { // if arg == list
+    //         // could do func to handle list or handle
+    //         if (args.next()) {
+    //             while (args.next()) |innerArg1| {
+    //                 if (std.mem.eql(u8, innerArg1[0..2], "--")) { //TODO: this could be standardized for every command argument
+    //                     // determine command arg here, `all` or `item`
+    //                     if (std.mem.eql(u8, innerArg1[2..6], "all")) {
+    //                         //TODO: list all here
+    //                     } else if (std.mem.eql(u8, innerArg1[2..7], "item")) {
+    //                         while (args.next()) |innerArg2| {
+    //                             std.debug.print("{s}", .{innerArg2});
+    //                             //TODO: attempt to use arg to find a specific item in the array
+    //                             //TODO: something like: const item = findItem(taskArray, innerArg2)
+    //                         }
+    //                     } else {
+    //                         //TODO: here the user entered `--` but no valid command, throw `help list`
+    //                     }
+    //                 }
+    //             }
+    //         } else {
+    //             //TODO: here no arguements were provided so we just list the incomplete items
+    //         }
+    //     } else if (std.mem.eql(u8, arg, "add")) { // if arg == add
+    //         //TODO: check if theres an additional arg and make a new task and add that to the array
+    //         //TODO: otherwise throw `help add`
+    //     } else if (std.mem.eql(u8, arg, "delete")) { // if arg == delete
+    //         //TODO: check if theres an additional arg and check if its a valid ID then delete from the array
+    //         //TODO: if an ID is provided and its invalid throw invalid ID message
+    //         //TODO: otherwise no ID provided, throw `help delete`
+    //     } else if (std.mem.eql(u8, arg, "complete")) { // if arg == complete
+    //         //TODO: check if theres an additional arg and check if its a valid ID then change the bool flag to true
+    //         //TODO: if an ID is provided and its invalid throw invalid ID message
+    //         //TODO: otherwise no ID provided, throw `help delete`
+    //     } else if (std.mem.eql(u8, arg, "help")) { // if arg == help
+    //         //TODO: check if theres an additional arg
+    //         if (args.next()) {
+    //             // TODO:check which subcommand is listed, similar to the checking on the higher scope of this check
+    //             // TODO:then throw each commands help message
+    //             // TODO: otherwise throw command not found and simple help useage
+    //         } else {
+    //             //TODO: list basic help command
+    //         }
+    //     } else {
+    //         // TODO: list basic help command
+    //     }
+    // }
 }
