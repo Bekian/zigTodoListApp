@@ -49,80 +49,30 @@ pub fn convertTimestamp(timestamp: i64) ![]const u8 {
     return try std.fmt.bufPrint(&formattingBuffer, "{s} {d} {d}", .{ creationMonth, creationDay, creationYear });
 }
 
-// TODO: will be refactored
-pub fn listTasks(file: []const u8) !void {
-    // open csv
-    const currentfile = try std.fs.cwd().openFile(file, .{});
-    defer currentfile.close();
-
-    // reader
-    var buf_reader = std.io.bufferedReader(currentfile.reader());
-    var in_stream = buf_reader.reader();
-
-    // read and process the lines using the above reader
-    var buf: [1024]u8 = undefined;
-    std.debug.print("\n", .{});
-    while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
-        // split line into fields
-        var iter = std.mem.splitSequence(u8, line, ",");
-        while (iter.next()) |field| {
-            try printWord(field);
-        }
-        std.debug.print("\n", .{});
+// TODO: Review
+// lists all the current tasks in the task list
+pub fn listTasks(taskList: std.ArrayList(Task)) !void {
+    std.debug.print("Tasks:\n", .{});
+    for (taskList.items) |task| {
+        std.debug.print("ID: {}, Description: {s}, Creation: {}, Completed: {}\n", .{ task.ID, task.TaskDescription, task.Creation, task.Completed });
     }
 }
 
-// TODO: will be refactored
-pub fn addTask(file: []const u8) !void {
-    // TODO: this should be moved to a higher scope postion
-    // open csv with the mode set to read_write
-    const currentfile = try std.fs.cwd().openFile(file, .{ .mode = .read_write });
-    // defer closing
-    defer currentfile.close();
-    // jump to the end of the file
-    try currentfile.seekFromEnd(0);
-    // create a buffered writer for the current file (to write to the file)
-    var buf_writer = std.io.bufferedWriter(currentfile.writer());
-    // get the generic writer from buffered writer (idk why we need to do this)
-    var out_stream = buf_writer.writer();
-
-    // get unix timestamp in seconds
-    const creationTimeStamp = time.timestamp();
-    // this timestamp is used to show to the user, we write the above timestamp to the file
-    const formattedTimeStamp = convertTimestamp(creationTimeStamp);
-
-    // get the ID of the new item
-
-    // create a stdin reader and writer to read and write to and from the terminal
-    const stdin = std.io.getStdIn().reader();
-    const stdout = std.io.getStdOut().writer();
-    // message displayed when taking the users' input
-    try stdout.print("Enter your new task: ", .{});
-    // buffer of 100u8s for our buffer reader
-    var buffer: [100]u8 = undefined;
-    // attempt to read the user input
-    if (try stdin.readUntilDelimiterOrEof(&buffer, '\n')) |user_input| {
-        // only write to the file if the user entered something
-        if (user_input.len >= 1) {
-            // write a validation message to the user with their task
-            try stdout.print("Task: {s}! at time {s}\n", .{ user_input, formattedTimeStamp });
-
-            // trim any trailing newline
-            const trimmed_output = std.mem.trimRight(u8, user_input, "\r\n");
-            var newLineBuffer: [150]u8 = undefined; // trying this length and i'll adjust the size if necessary
-            // get ID
-            const newTaskLine = try std.fmt.bufPrint(&newLineBuffer, "{s}\t\t{d}", .{ trimmed_output, creationTimeStamp });
-
-            // write the trimmed output to the file
-            try out_stream.print("\n{s}", .{newTaskLine});
-        } else {
-            // if the user didnt provide a task, then inform the user of this.
-            std.debug.print("No task provided, try again.", .{});
-            // TODO: invalidCommand should be ran after this, here or repl
-        }
+// TODO: Review
+// attempts to add a new task to the given task list
+pub fn addTask(allocator: std.mem.Allocator, taskList: *std.ArrayList(Task), newTaskDescription: []const u8) !void {
+    // ensure the description length is acceptable
+    if (newTaskDescription.len <= 0) {
+        return error.InvalidDescriptionLength;
     }
-    // flush the writer (the writer is like a cache that must be cleared)
-    try buf_writer.flush();
+    // create a new task ID based on the current highest task ID
+    const newTaskID = try getLastId(taskList.*) + 1;
+    // get a new timestamp
+    const newTaskCreation = time.timestamp();
+    // then using that information and the provided description create a new task
+    const newTask = Task{ .ID = newTaskID, .TaskDescription = try allocator.dupe(u8, newTaskDescription), .Creation = newTaskCreation, .Completed = false };
+    // append the new task to the task list
+    try taskList.append(newTask);
 }
 
 // switchcase to return the string name of a month
@@ -171,64 +121,80 @@ pub fn findMonth(month: std.time.epoch.Month) ![]const u8 {
 pub fn invalidCommand() void {}
 
 // Gets the last ID in the file as a string
-pub fn getLastId(tasks: []Task) ![]const u8 {
-    _ = tasks; // autofix
-
+pub fn getLastId(taskList: std.ArrayList(Task)) !u8 {
+    return taskList.getLast().ID;
 }
 
-// TODO: Currently in progress
-pub fn processTasks(fileName: std.fs.File) ![]Task {
+// TODO: Look for optimizations
+pub fn processTasks(allocator: std.mem.Allocator, fileName: std.fs.File) !std.ArrayList(Task) {
     // reader
     var buf_reader = std.io.bufferedReader(fileName.reader());
     var in_stream = buf_reader.reader();
-    const taskArray: []Task = undefined;
+
+    var taskArray = std.ArrayList(Task).init(allocator);
 
     // read and process the lines using the above reader
     var buf: [1024]u8 = undefined;
-    std.debug.print("\n", .{});
     while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
-        // TODO: how do i know what the first row is?
-        std.debug.print("{s}\n", .{line});
         // split line into fields
         var iter = std.mem.splitSequence(u8, line, ",");
-        var taskNumber: usize = 0;
+        // task made of strings
         var taskRow: [4][]const u8 = undefined;
         var i: usize = 0;
         while (iter.next()) |word| {
-            if (!(std.mem.eql(u8, word, "ID")) or !(std.mem.eql(u8, word, "Task")) or !(std.mem.eql(u8, word, "Date")) or !(std.mem.eql(u8, word, "completed"))) {
-                taskRow[i] = word;
-                i += 1;
-                if (i >= 4) {
-                    std.debug.print("\n PROCCESSING ERROR: index out of range. Verify your source file is the correct structure.", .{});
-                    unreachable;
-                }
+            // std.debug.print("{d}, {s}\n", .{ i, word }); // debug line, leave until feature complete
+            // continue if header
+            if ((std.mem.eql(u8, word, "ID")) or (std.mem.eql(u8, word, "Task")) or (std.mem.eql(u8, word, "Date")) or (std.mem.eql(u8, word, "Completed"))) {
+                continue;
             }
+            // check index out of range
+            if (i >= 4) {
+                std.debug.print("\n PROCCESSING ERROR: index out of range. Verify your source file is the correct structure.", .{});
+                return error.ProcessingError;
+            }
+            taskRow[i] = word;
+            i += 1;
         }
-
-        const taskId = taskRow[0];
+        // validate task row length
+        if (i == 0) {
+            // this should occur for the header row
+            continue;
+        } else if (i != 4) {
+            // the row length should always be equal to 4
+            std.debug.print("\n PROCCESSING ERROR: not enough fields. Verify your source file is the correct structure.", .{});
+            return error.ProcessingError;
+        }
+        const taskId = try std.fmt.parseInt(u8, taskRow[0], 10);
         const description = taskRow[1];
         const creationTime = try std.fmt.parseInt(i64, taskRow[2], 10);
-
         const initialCompletionStatus = try checkBool(taskRow[3]);
-        const newItem = Task{ .ID = try std.fmt.parseInt(u8, taskId, 10), .TaskDescription = description, .Creation = creationTime, .Completed = initialCompletionStatus };
-        taskArray[taskNumber] = newItem;
-        taskNumber += 1;
+        const newTask = Task{ .ID = taskId, .TaskDescription = try allocator.dupe(u8, description), .Creation = creationTime, .Completed = initialCompletionStatus };
+        try taskArray.append(newTask);
     }
     return taskArray;
 }
 
 pub fn main() !void {
     // TODO: init
-    // first open the file
-    // read the items and translate them into task structs
-    // call the getLastId function or equivalent
-    // determie if the user used a repl or a command
+    // first open the file √
+    // read the items and translate them into task structs √
+    // call the getLastId function or equivalent √
+    // determine if the user used a repl or a command
     // open csv with the mode set to read_write
     const currentfile = try std.fs.cwd().openFile("src/data.csv", .{ .mode = .read_write });
     // defer closing
     defer currentfile.close();
-    const taskList = try processTasks(currentfile); //TODO: temp const; change back to var
-    _ = taskList; // autofix
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    var taskList = try processTasks(allocator, currentfile);
+    defer taskList.deinit();
+
+    // this only adds a task it doesnt save the new task to the file
+    // try addTask(allocator, &taskList, "test");
+
+    try listTasks(taskList); // display all the tasks
+    // const lastID = try getLastId(taskList);
 
     // command: TODO: determine what command was entered
     // parse the argument if any, and compute the result
@@ -246,6 +212,9 @@ pub fn main() !void {
     // try listTasks("src/data.csv");
     var args = std.process.args();
     _ = args.skip(); // Skip the program name
+    if (args.next() != null) {
+        std.debug.print("{any}", .{args.inner});
+    }
     // const list = std.flag.Int("list", .{ .help = "List the created tasks", .useage = "`list` - lists uncomplete tasks by default.\n`list --all` - lists all tasks." });
 
     // _ = try std.flag.parse(std.process.args());
@@ -298,4 +267,8 @@ pub fn main() !void {
     //         // TODO: list basic help command
     //     }
     // }
+
+    for (taskList.items) |task| {
+        allocator.free(task.TaskDescription);
+    }
 }
