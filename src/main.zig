@@ -8,17 +8,10 @@ const time = std.time;
 // delete <id>
 // help command to list commands and a command as an argument for command useage
 
-const Task = struct { ID: u8, TaskDescription: []const u8, Creation: i64, Completed: bool };
+// Assumptions:
+// - for the purposes of this cli a task cannot be marked as incomplete, or undo a completion status
 
-// TODO: Review
-// lists all the current tasks in the task list
-pub fn listTasks(taskList: std.ArrayList(Task)) !void {
-    std.debug.print("Tasks:\n", .{});
-    for (taskList.items) |task| {
-        const formattedCreationDate = try convertTimestamp(task.Creation);
-        std.debug.print("ID: {}, Description: {s}, Creation: {s}, Completed: {}\n", .{ task.ID, task.TaskDescription, formattedCreationDate, task.Completed });
-    }
-}
+const Task = struct { ID: u8, TaskDescription: []const u8, Creation: i64, Completed: bool };
 
 // TODO: Review
 // attempts to add a new task to the given task list
@@ -35,6 +28,28 @@ pub fn addTask(allocator: std.mem.Allocator, taskList: *std.ArrayList(Task), new
     const newTask = Task{ .ID = newTaskID, .TaskDescription = try allocator.dupe(u8, newTaskDescription), .Creation = newTaskCreation, .Completed = false };
     // append the new task to the task list
     try taskList.append(newTask);
+}
+
+// TODO: Review
+// currently lists all tasks by default
+// lists all the current tasks in the task list
+pub fn listTasks(taskList: std.ArrayList(Task)) !void {
+    std.debug.print("Tasks:\n", .{});
+    for (taskList.items) |task| {
+        const formattedCreationDate = try convertTimestamp(task.Creation);
+        std.debug.print("ID: {}, Description: {s}, Creation: {s}, Completed: {}\n", .{ task.ID, task.TaskDescription, formattedCreationDate, task.Completed });
+    }
+}
+
+// TODO: Review
+// marks a task of specified ID as complete
+// if no error then success
+pub fn markComplete(taskList: std.ArrayList(Task), taskID: u8) !void {
+    // check if the provided ID is valid
+    if (taskList.items.len <= taskID) {
+        return error.TaskIDOutOfBounds;
+    }
+    taskList.items[taskID].Completed = true;
 }
 
 // TODO: Review if necessary
