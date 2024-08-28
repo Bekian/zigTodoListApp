@@ -10,6 +10,7 @@ const time = std.time;
 
 // Assumptions:
 // - for the purposes of this cli a task cannot be marked as incomplete, or undo a completion status
+// - the completeTask function expects an ID from the perspective as taking input from the user; it takes an ID of a task, not the index within the task list
 
 const Task = struct { ID: u8, TaskDescription: []const u8, Creation: i64, Completed: bool };
 
@@ -44,12 +45,12 @@ pub fn listTasks(taskList: std.ArrayList(Task)) !void {
 // TODO: Review
 // marks a task of specified ID as complete
 // if no error then success
-pub fn markComplete(taskList: std.ArrayList(Task), taskID: u8) !void {
+pub fn completeTask(taskList: std.ArrayList(Task), taskID: u8) !void {
     // check if the provided ID is valid
     if (taskList.items.len <= taskID) {
         return error.TaskIDOutOfBounds;
     }
-    taskList.items[taskID].Completed = true;
+    taskList.items[taskID - 1].Completed = true;
 }
 
 // TODO: Review if necessary
@@ -200,6 +201,8 @@ pub fn main() !void {
     // try addTask(allocator, &taskList, "test");
     // get last task ID number
     // const lastID = try getLastId(taskList);
+    // mark the first task as complete
+    // try completeTask(taskList, 1);
     // display all the tasks
     try listTasks(taskList);
 
