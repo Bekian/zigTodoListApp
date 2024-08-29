@@ -33,12 +33,28 @@ pub fn addTask(allocator: std.mem.Allocator, taskList: *std.ArrayList(Task), new
 
 // TODO: Review
 // currently lists all tasks by default
-// lists all the current tasks in the task list
-pub fn listTasks(taskList: std.ArrayList(Task)) !void {
-    std.debug.print("Tasks:\n", .{});
-    for (taskList.items) |task| {
+// lists tasks in the provided task list
+// ignore allFlag value if itemID is given
+pub fn listTasks(taskList: std.ArrayList(Task), allFlag: ?bool, itemID: ?u8) !void {
+    if (itemID != null) { // case where a single task is listed
+        const task = taskList.items[itemID.? - 1];
+        std.debug.print("Task:\n", .{});
         const formattedCreationDate = try convertTimestamp(task.Creation);
         std.debug.print("ID: {}, Description: {s}, Creation: {s}, Completed: {}\n", .{ task.ID, task.TaskDescription, formattedCreationDate, task.Completed });
+    } else if (allFlag == true and itemID == null) { // case where all items are listed
+        std.debug.print("Tasks:\n", .{});
+        for (taskList.items) |task| {
+            const formattedCreationDate = try convertTimestamp(task.Creation);
+            std.debug.print("ID: {}, Description: {s}, Creation: {s}, Completed: {}\n", .{ task.ID, task.TaskDescription, formattedCreationDate, task.Completed });
+        }
+    } else { // case where all incomplete tasks are listed
+        std.debug.print("Tasks:\n", .{});
+        for (taskList.items) |task| {
+            if (!(task.Completed)) {
+                const formattedCreationDate = try convertTimestamp(task.Creation);
+                std.debug.print("ID: {}, Description: {s}, Creation: {s}, Completed: {}\n", .{ task.ID, task.TaskDescription, formattedCreationDate, task.Completed });
+            }
+        }
     }
 }
 
@@ -203,8 +219,16 @@ pub fn main() !void {
     // const lastID = try getLastId(taskList);
     // mark the first task as complete
     // try completeTask(taskList, 1);
+
     // display all the tasks
-    try listTasks(taskList);
+    // list all tasks
+    try listTasks(taskList, true, null);
+    // list only incomplete tasks
+    // try listTasks(taskList, false, null);
+    // list item with ID 1
+    // try listTasks(taskList, false, 1);
+    // test ignore true flag with task with ID 1
+    // try listTasks(taskList, true, 1);
 
     // command: TODO: determine what command was entered
     // parse the argument if any, and compute the result
