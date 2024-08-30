@@ -68,7 +68,7 @@ pub fn completeTask(taskList: std.ArrayList(Task), taskID: u8) !void {
     taskList.items[taskID - 1].Completed = true;
 }
 
-// TODO: WIP
+// TODO: Review
 // deletes a task from the provided list at the provided ID
 pub fn deleteTask(allocator: std.mem.Allocator, taskList: *std.ArrayList(Task), taskID: u8) !void {
     // with calculated IDs we only need to check the bounds and not search within the arraylist for a task to delete
@@ -78,6 +78,25 @@ pub fn deleteTask(allocator: std.mem.Allocator, taskList: *std.ArrayList(Task), 
     const task = taskList.items[taskID - 1];
     allocator.free(task.TaskDescription);
     _ = taskList.orderedRemove(taskID - 1);
+}
+
+// TODO: WIP
+// list available commands, shortcuts and basic usage
+// allows for flags to be used to give more detail about specific commands
+pub fn help(chosenCommand: u4) !void {
+    if (chosenCommand == 0) {
+        // list all commands
+    } else if (chosenCommand == 1) {
+        // list add task command useage
+    } else if (chosenCommand == 2) {
+        // list list tasks command useage
+    } else if (chosenCommand == 3) {
+        // list complete task command useage
+    } else if (chosenCommand == 4) {
+        // list delete task command useage
+    } else {
+        // see details about more how this should work in the main block
+    }
 }
 
 // this will be ran when an invalid command is ran
@@ -207,7 +226,7 @@ pub fn processTasks(allocator: std.mem.Allocator, fileName: std.fs.File) !std.Ar
 }
 
 pub fn main() !void {
-    // TODO: init
+    // Init
     // open csv with the mode set to read_write
     const currentfile = try std.fs.cwd().openFile("src/data.csv", .{ .mode = .read_write });
     defer currentfile.close();
@@ -215,6 +234,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
+    // process the tasks using the provided allocator and csv file into a task arraylist
     var taskList = try processTasks(allocator, currentfile);
     defer taskList.deinit();
 
