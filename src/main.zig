@@ -11,8 +11,9 @@ const time = std.time;
 // Assumptions:
 // - for the purposes of this cli a task cannot be marked as incomplete, or undo a completion status
 // - the completeTask function expects an ID from the perspective as taking input from the user; it takes an ID of a task, not the index within the task list
+// - the ID is roughly equal to the index of the task + 1, and is dynamically calculated
 
-const Task = struct { ID: u8, TaskDescription: []const u8, Creation: i64, Completed: bool };
+const Task = struct { TaskDescription: []const u8, Creation: i64, Completed: bool };
 
 // TODO: Review
 // attempts to add a new task to the given task list
@@ -21,12 +22,10 @@ pub fn addTask(allocator: std.mem.Allocator, taskList: *std.ArrayList(Task), new
     if (newTaskDescription.len <= 0) {
         return error.InvalidDescriptionLength;
     }
-    // create a new task ID based on the current highest task ID
-    const newTaskID = try getLastId(taskList.*) + 1;
     // get a new timestamp
     const newTaskCreation = time.timestamp();
     // then using that information and the provided description create a new task
-    const newTask = Task{ .ID = newTaskID, .TaskDescription = try allocator.dupe(u8, newTaskDescription), .Creation = newTaskCreation, .Completed = false };
+    const newTask = Task{ .TaskDescription = try allocator.dupe(u8, newTaskDescription), .Creation = newTaskCreation, .Completed = false };
     // append the new task to the task list
     try taskList.append(newTask);
 }
@@ -40,19 +39,19 @@ pub fn listTasks(taskList: std.ArrayList(Task), allFlag: ?bool, itemID: ?u8) !vo
         const task = taskList.items[itemID.? - 1];
         std.debug.print("Task:\n", .{});
         const formattedCreationDate = try convertTimestamp(task.Creation);
-        std.debug.print("ID: {}, Description: {s}, Creation: {s}, Completed: {}\n", .{ task.ID, task.TaskDescription, formattedCreationDate, task.Completed });
+        std.debug.print("ID: {?}, Description: {s}, Creation: {s}, Completed: {}\n", .{ itemID.?, task.TaskDescription, formattedCreationDate, task.Completed });
     } else if (allFlag == true and itemID == null) { // case where all items are listed
         std.debug.print("Tasks:\n", .{});
-        for (taskList.items) |task| {
+        for (taskList.items, 1..) |task, ID| {
             const formattedCreationDate = try convertTimestamp(task.Creation);
-            std.debug.print("ID: {}, Description: {s}, Creation: {s}, Completed: {}\n", .{ task.ID, task.TaskDescription, formattedCreationDate, task.Completed });
+            std.debug.print("ID: {d}, Description: {s}, Creation: {s}, Completed: {}\n", .{ ID, task.TaskDescription, formattedCreationDate, task.Completed });
         }
-    } else { // case where all incomplete tasks are listed
+    } else { // case where only incomplete tasks are listed
         std.debug.print("Tasks:\n", .{});
-        for (taskList.items) |task| {
+        for (taskList.items, 1..) |task, ID| {
             if (!(task.Completed)) {
                 const formattedCreationDate = try convertTimestamp(task.Creation);
-                std.debug.print("ID: {}, Description: {s}, Creation: {s}, Completed: {}\n", .{ task.ID, task.TaskDescription, formattedCreationDate, task.Completed });
+                std.debug.print("ID: {d}, Description: {s}, Creation: {s}, Completed: {}\n", .{ ID, task.TaskDescription, formattedCreationDate, task.Completed });
             }
         }
     }
@@ -68,6 +67,21 @@ pub fn completeTask(taskList: std.ArrayList(Task), taskID: u8) !void {
     }
     taskList.items[taskID - 1].Completed = true;
 }
+
+// TODO: WIP
+// deletes a task from the provided list at the provided ID
+pub fn deleteTask(allocator: std.mem.Allocator, taskList: *std.ArrayList(Task), taskID: u8) !void {
+    // with calculated IDs we only need to check the bounds and not search within the arraylist for a task to delete
+    if (taskID <= 0 or taskID > taskList.items.len) {
+        return error.taskIDOutOfBounds;
+    }
+    const task = taskList.items[taskID - 1];
+    allocator.free(task.TaskDescription);
+    _ = taskList.orderedRemove(taskID - 1);
+}
+
+// this will be ran when an invalid command is ran
+pub fn invalidCommand() void {}
 
 // TODO: Review if necessary
 // switchcase to return the string name of a month
@@ -111,9 +125,6 @@ pub fn findMonth(month: std.time.epoch.Month) ![]const u8 {
         },
     }
 }
-
-// this will be ran when an invalid command is ran
-pub fn invalidCommand() void {}
 
 // Gets the last ID in the file as a string
 pub fn getLastId(taskList: std.ArrayList(Task)) !u8 {
@@ -161,16 +172,16 @@ pub fn processTasks(allocator: std.mem.Allocator, fileName: std.fs.File) !std.Ar
         // split line into fields
         var iter = std.mem.splitSequence(u8, line, ",");
         // task made of strings
-        var taskRow: [4][]const u8 = undefined;
+        var taskRow: [3][]const u8 = undefined;
         var i: usize = 0;
         while (iter.next()) |word| {
             // std.debug.print("{d}, {s}\n", .{ i, word }); // debug line, leave until feature complete
             // continue if header
-            if ((std.mem.eql(u8, word, "ID")) or (std.mem.eql(u8, word, "Task")) or (std.mem.eql(u8, word, "Date")) or (std.mem.eql(u8, word, "Completed"))) {
+            if ((std.mem.eql(u8, word, "Task")) or (std.mem.eql(u8, word, "Date")) or (std.mem.eql(u8, word, "Completed"))) {
                 continue;
             }
             // check index out of range
-            if (i >= 4) {
+            if (i >= 3) {
                 std.debug.print("\n PROCCESSING ERROR: index out of range. Verify your source file is the correct structure.", .{});
                 return error.ProcessingError;
             }
@@ -181,16 +192,15 @@ pub fn processTasks(allocator: std.mem.Allocator, fileName: std.fs.File) !std.Ar
         if (i == 0) {
             // this should occur for the header row
             continue;
-        } else if (i != 4) {
+        } else if (i != 3) {
             // the row length should always be equal to 4
             std.debug.print("\n PROCCESSING ERROR: not enough fields. Verify your source file is the correct structure.", .{});
             return error.ProcessingError;
         }
-        const taskId = try std.fmt.parseInt(u8, taskRow[0], 10);
-        const description = taskRow[1];
-        const creationTime = try std.fmt.parseInt(i64, taskRow[2], 10);
-        const initialCompletionStatus = try checkBool(taskRow[3]);
-        const newTask = Task{ .ID = taskId, .TaskDescription = try allocator.dupe(u8, description), .Creation = creationTime, .Completed = initialCompletionStatus };
+        const description = taskRow[0];
+        const creationTime = try std.fmt.parseInt(i64, taskRow[1], 10);
+        const initialCompletionStatus = try checkBool(taskRow[2]);
+        const newTask = Task{ .TaskDescription = try allocator.dupe(u8, description), .Creation = creationTime, .Completed = initialCompletionStatus };
         try taskArray.append(newTask);
     }
     return taskArray;
@@ -198,11 +208,6 @@ pub fn processTasks(allocator: std.mem.Allocator, fileName: std.fs.File) !std.Ar
 
 pub fn main() !void {
     // TODO: init
-    // first open the file √
-    // read the items and translate them into task structs √
-    // call the getLastId function or equivalent √
-    // determine if the user used a repl or a command √
-
     // open csv with the mode set to read_write
     const currentfile = try std.fs.cwd().openFile("src/data.csv", .{ .mode = .read_write });
     defer currentfile.close();
@@ -219,6 +224,9 @@ pub fn main() !void {
     // const lastID = try getLastId(taskList);
     // mark the first task as complete
     // try completeTask(taskList, 1);
+
+    // deletes a single task
+    // try deleteTask(allocator, &taskList, 2);
 
     // display all the tasks
     // list all tasks
