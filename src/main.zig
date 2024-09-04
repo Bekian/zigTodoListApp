@@ -13,7 +13,7 @@ const time = std.time;
 // - the completeTask function expects an ID from the perspective as taking input from the user; it takes an ID of a task, not the index within the task list
 // - the ID is roughly equal to the index of the task + 1, and is dynamically calculated
 
-const Task = struct { TaskDescription: []const u8, Creation: i64, Completed: bool };
+const Task = struct { ID: u8, TaskDescription: []const u8, Creation: i64, Completed: bool };
 
 // TODO: Review
 // attempts to add a new task to the given task list
@@ -22,10 +22,12 @@ pub fn addTask(allocator: std.mem.Allocator, taskList: *std.ArrayList(Task), new
     if (newTaskDescription.len <= 0) {
         return error.InvalidDescriptionLength;
     }
+    // this may be imperfect
+    const newTaskID = try getLastId(taskList.*) + 1;
     // get a new timestamp
     const newTaskCreation = time.timestamp();
     // then using that information and the provided description create a new task
-    const newTask = Task{ .TaskDescription = try allocator.dupe(u8, newTaskDescription), .Creation = newTaskCreation, .Completed = false };
+    const newTask = Task{ .ID = newTaskID, .TaskDescription = try allocator.dupe(u8, newTaskDescription), .Creation = newTaskCreation, .Completed = false };
     // append the new task to the task list
     try taskList.append(newTask);
 }
@@ -42,16 +44,16 @@ pub fn listTasks(taskList: std.ArrayList(Task), allFlag: ?bool, itemID: ?u8) !vo
         std.debug.print("ID: {?}, Description: {s}, Creation: {s}, Completed: {}\n", .{ itemID.?, task.TaskDescription, formattedCreationDate, task.Completed });
     } else if (allFlag == true and itemID == null) { // case where all items are listed
         std.debug.print("Tasks:\n", .{});
-        for (taskList.items, 1..) |task, ID| {
+        for (taskList.items) |task| {
             const formattedCreationDate = try convertTimestamp(task.Creation);
-            std.debug.print("ID: {d}, Description: {s}, Creation: {s}, Completed: {}\n", .{ ID, task.TaskDescription, formattedCreationDate, task.Completed });
+            std.debug.print("ID: {d}, Description: {s}, Creation: {s}, Completed: {}\n", .{ task.ID, task.TaskDescription, formattedCreationDate, task.Completed });
         }
     } else { // case where only incomplete tasks are listed
         std.debug.print("Tasks:\n", .{});
-        for (taskList.items, 1..) |task, ID| {
+        for (taskList.items) |task| {
             if (!(task.Completed)) {
                 const formattedCreationDate = try convertTimestamp(task.Creation);
-                std.debug.print("ID: {d}, Description: {s}, Creation: {s}, Completed: {}\n", .{ ID, task.TaskDescription, formattedCreationDate, task.Completed });
+                std.debug.print("ID: {d}, Description: {s}, Creation: {s}, Completed: {}\n", .{ task.ID, task.TaskDescription, formattedCreationDate, task.Completed });
             }
         }
     }
@@ -191,16 +193,16 @@ pub fn processTasks(allocator: std.mem.Allocator, fileName: std.fs.File) !std.Ar
         // split line into fields
         var iter = std.mem.splitSequence(u8, line, ",");
         // task made of strings
-        var taskRow: [3][]const u8 = undefined;
+        var taskRow: [4][]const u8 = undefined;
         var i: usize = 0;
         while (iter.next()) |word| {
             // std.debug.print("{d}, {s}\n", .{ i, word }); // debug line, leave until feature complete
             // continue if header
-            if ((std.mem.eql(u8, word, "Task")) or (std.mem.eql(u8, word, "Date")) or (std.mem.eql(u8, word, "Completed"))) {
+            if ((std.mem.eql(u8, word, "ID")) or (std.mem.eql(u8, word, "Task")) or (std.mem.eql(u8, word, "Date")) or (std.mem.eql(u8, word, "Completed"))) {
                 continue;
             }
             // check index out of range
-            if (i >= 3) {
+            if (i >= 4) {
                 std.debug.print("\n PROCCESSING ERROR: index out of range. Verify your source file is the correct structure.", .{});
                 return error.ProcessingError;
             }
@@ -211,15 +213,16 @@ pub fn processTasks(allocator: std.mem.Allocator, fileName: std.fs.File) !std.Ar
         if (i == 0) {
             // this should occur for the header row
             continue;
-        } else if (i != 3) {
+        } else if (i != 4) {
             // the row length should always be equal to 4
             std.debug.print("\n PROCCESSING ERROR: not enough fields. Verify your source file is the correct structure.", .{});
             return error.ProcessingError;
         }
-        const description = taskRow[0];
-        const creationTime = try std.fmt.parseInt(i64, taskRow[1], 10);
-        const initialCompletionStatus = try checkBool(taskRow[2]);
-        const newTask = Task{ .TaskDescription = try allocator.dupe(u8, description), .Creation = creationTime, .Completed = initialCompletionStatus };
+        const taskId = try std.fmt.parseInt(u8, taskRow[0], 10);
+        const description = taskRow[1];
+        const creationTime = try std.fmt.parseInt(i64, taskRow[2], 10);
+        const initialCompletionStatus = try checkBool(taskRow[3]);
+        const newTask = Task{ .ID = taskId, .TaskDescription = try allocator.dupe(u8, description), .Creation = creationTime, .Completed = initialCompletionStatus };
         try taskArray.append(newTask);
     }
     return taskArray;
