@@ -9,7 +9,7 @@ const time = std.time;
 // help command to list commands and a command as an argument for command useage
 
 // Assumptions:
-// - for the purposes of this cli a task cannot be marked as incomplete, or undo a completion status
+// - for the purposes of this cli a task cannot be marked as incomplete, or undo a completed status
 // - the completeTask function expects an ID from the perspective as taking input from the user; it takes an ID of a task, not the index within the task list
 // - the ID is roughly equal to the index of the task + 1, and is dynamically calculated
 
@@ -24,6 +24,8 @@ const processError = error{
     ProcessingError,
     ConditionValueInvalid,
     NoItemIDProvided,
+    InvalidFlagArgs,
+    TooManyArgs,
 };
 
 // TODO: Review
@@ -79,7 +81,7 @@ pub fn listTasks(taskList: std.ArrayList(Task), allFlag: ?bool, itemID: ?u8) !vo
 // if no error then success
 pub fn completeTask(taskList: std.ArrayList(Task), taskID: u8) !void {
     // check if the provided ID is valid
-    if (taskList.items.len <= taskID) {
+    if (taskID > taskList.items.len) {
         return processError.TaskIDOutOfBounds;
     }
     taskList.items[taskID - 1].Completed = true;
@@ -265,21 +267,30 @@ pub fn parseTasks(allocator: std.mem.Allocator, fileName: std.fs.File) !std.Arra
 
 // parse the arguments
 pub fn parseArgs(args: [][:0]const u8, allocator: std.mem.Allocator, taskList: *std.ArrayList(Task)) !bool {
+    // if there are args
     if (args.len > 0) {
+        // get the first arg
         const arg = args[1];
+        // log the command used
         std.debug.print("Arg used: `{s}`\n", .{arg});
-        // here process args
+        // parse which arg was used
+        // TODO: review
         if (std.mem.eql(u8, arg, "add")) {
+            // attempt to add a task
             addTask(allocator, @constCast(taskList), "test") catch |err| {
                 return err;
             };
         } else if (std.mem.eql(u8, arg, "list")) {
-            // list command complete
+            // TODO: list command complete
             // first check if there are any flags
+            std.debug.print("Args: {d}\n", .{args.len});
             if (args.len < 3) {
                 // if no flags then list incomplete tasks by default
                 try listTasks(taskList.*, false, null);
                 return false;
+            } else if (args.len >= 5) {
+                // here the user has entered too many args
+                return processError.TooManyArgs;
             }
             // otherwise check which flags are used
             const arg2 = args[2];
@@ -301,13 +312,22 @@ pub fn parseArgs(args: [][:0]const u8, allocator: std.mem.Allocator, taskList: *
                 listTasks(taskList.*, false, itemID) catch |err| {
                     return err;
                 };
+            } else {
+                // here we've already validated any correct flag arguments, so the user must have entered an invalid flag
+                // a common approach here would be to just run the list command without flags
+                // but i'd like to provide "realistic" behavior and enforce syntax rules
+                return processError.InvalidFlagArgs;
             }
-        
         } else if (std.mem.eql(u8, arg, "complete")) {
-            std.debug.print("{d} {s}\n", .{ args.len, args });
-            if (args.len < 2) {
+            // TODO: complete command complete
+            // provide proper error messages if the args aren't correct
+            if (args.len < 3) {
                 return processError.NoItemIDProvided;
+            } else if (args.len > 3) {
+                return processError.TooManyArgs;
             }
+            // from here we can assume the args amount is correct
+            // we just need to attempt to parse the item id and complete the task
             const arg2 = args[2];
             const itemID = std.fmt.parseInt(u8, arg2, 10) catch |err| {
                 return err;
@@ -426,6 +446,12 @@ pub fn main() !void {
                             processError.NoItemIDProvided => {
                                 std.debug.print("No item ID provided. error: {any}\n", .{err});
                             },
+                            processError.InvalidFlagArgs => {
+                                std.debug.print("Invalid flag arguments error: {any}\n", .{err});
+                            },
+                            processError.TooManyArgs => {
+                                std.debug.print("Too many flags error: {any}\n", .{err});
+                            },
                             else => {
                                 std.debug.print("ERROR: {any}\n", .{err});
                             },
@@ -462,6 +488,12 @@ pub fn main() !void {
                 },
                 processError.NoItemIDProvided => {
                     std.debug.print("No item ID provided. error: {any}\n", .{err});
+                },
+                processError.InvalidFlagArgs => {
+                    std.debug.print("Invalid flag arguments error: {any}\n", .{err});
+                },
+                processError.TooManyArgs => {
+                    std.debug.print("Too many flags error: {any}\n", .{err});
                 },
                 else => {
                     std.debug.print("ERROR: {any}\n", .{err});
