@@ -95,14 +95,14 @@ pub fn deleteTask(allocator: std.mem.Allocator, taskList: *std.ArrayList(Task), 
         return processError.TaskIDOutOfBounds;
     }
     const task = taskList.items[taskID - 1];
-    allocator.free(task.TaskDescription);
     _ = taskList.orderedRemove(taskID - 1);
+    allocator.free(task.TaskDescription);
 }
 
 // TODO: WIP
 // list available commands, shortcuts and basic usage
 // allows for flags to be used to give more detail about specific commands
-pub fn help(chosenCommand: ?u8) !void {
+pub fn help(chosenCommand: ?u8) void {
     if (chosenCommand == null) {
         std.debug.print("Run command `help <command>` to list details about a command or `help` to list all commands\n", .{});
     } else if (chosenCommand == 0) {
@@ -134,7 +134,7 @@ pub fn help(chosenCommand: ?u8) !void {
 // this will be ran when an invalid command is ran
 pub fn invalidCommand(inputCommand: []const u8) !void {
     std.debug.print("ERROR: command `{s}` not found, type `help` for a list of commands\n", .{inputCommand});
-    try help(0);
+    help(0);
 }
 
 // TODO: Review if necessary
@@ -197,6 +197,16 @@ pub fn parseBool(inputString: []const u8) !bool {
         // tell user then crash
         std.debug.print("\n PROCCESSING ERROR: condition value invalid. Verify your source file is the correct structure.", .{});
         return processError.ConditionValueInvalid;
+    }
+}
+
+// turns a bool into a string `True` or `False`
+// assume input is valid
+pub fn unparseBool(inputBool: bool) []const u8 {
+    if (inputBool) {
+        return "True";
+    } else {
+        return "False";
     }
 }
 
@@ -272,18 +282,19 @@ pub fn parseArgs(args: [][:0]const u8, allocator: std.mem.Allocator, taskList: *
         // get the first arg
         const arg = args[1];
         // log the command used
-        std.debug.print("Arg used: `{s}`\n", .{arg});
+        std.debug.print("Args used: `{s}`\n", .{args[1..args.len]}); // keep until feature complete
         // parse which arg was used
         // TODO: review
         if (std.mem.eql(u8, arg, "add")) {
+            // get the task description from the remaining args, everything after add until the end of the array
+            // and join them into a single string
+            const taskDescription = try std.mem.join(allocator, " ", args[2..args.len]);
             // attempt to add a task
-            addTask(allocator, @constCast(taskList), "test") catch |err| {
+            addTask(allocator, @constCast(taskList), taskDescription) catch |err| {
                 return err;
             };
         } else if (std.mem.eql(u8, arg, "list")) {
             // TODO: list command complete
-            // first check if there are any flags
-            std.debug.print("Args: {d}\n", .{args.len});
             if (args.len < 3) {
                 // if no flags then list incomplete tasks by default
                 try listTasks(taskList.*, false, null);
@@ -337,15 +348,18 @@ pub fn parseArgs(args: [][:0]const u8, allocator: std.mem.Allocator, taskList: *
             };
         } else if (std.mem.eql(u8, arg, "delete")) {
             if (args.len > 1) {
-                const arg2 = args[1];
-                try deleteTask(allocator, taskList, try std.fmt.parseInt(u8, arg2, 10));
+                const arg2 = try std.fmt.parseInt(u8, args[2], 10);
+                std.debug.print("arg2: {any}\n", .{arg2});
+                try deleteTask(allocator, taskList, arg2);
+            } else {
+                return processError.NoItemIDProvided;
             }
         } else if (std.mem.eql(u8, arg, "help")) {
             if (args.len > 1) {
                 const arg2 = args[1];
-                try help(try std.fmt.parseInt(u8, arg2, 10));
+                help(try std.fmt.parseInt(u8, arg2, 10));
             } else {
-                try help(0);
+                help(0);
             }
         } else {
             try invalidCommand(arg);
@@ -395,12 +409,12 @@ pub fn main() !void {
     // parse the argument if any, and compute the result
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
-    std.debug.print("Args: {s}\n", .{args});
+    // std.debug.print("Args: {s}\n", .{args}); // keep until feature complete
 
     // repl picked if there is no args
     // args[0] is the program name so we need at least 2 total args
     if (args.len < 2) {
-        std.debug.print("Repl picked!\n", .{});
+        // std.debug.print("Repl picked!\n", .{}); // keep until feature complete
         // repl: TODO: begin loop √
         // set exit condition, ex: `exit`, `quit` etc. √
         // send prompt, ex: `>>>` √
@@ -429,28 +443,28 @@ pub fn main() !void {
                         std.debug.print("error caught: {any}\n", .{err});
                         switch (err) {
                             error.InvalidCharacter => {
-                                std.debug.print("ERROR: Provided ItemID is NaN, try again\nItemID provided: {s}\n", .{args[3]});
+                                std.debug.print("Provided ItemID is NaN, try again\nItemID provided: {s}\n", .{args[3]});
                             },
                             error.Overflow => {
-                                std.debug.print("ERROR: Provided ItemID is outside the range of u8, try again\nItemID provided: {s}\n", .{args[3]});
+                                std.debug.print("Provided ItemID is outside the range of u8, try again\nItemID provided: {s}\n", .{args[3]});
                             },
                             processError.InvalidItemID => {
-                                std.debug.print("Invalid item ID error: {any}\n", .{err});
+                                std.debug.print("Invalid item ID, itemID provided: {s}\n", .{args[3]});
                             },
                             processError.InvalidDescriptionLength => {
-                                std.debug.print("Invalid description length error: {any}\n", .{err});
+                                std.debug.print("Invalid description length: {any}\n", .{err});
                             },
                             processError.TaskIDOutOfBounds => {
-                                std.debug.print("Task ID out of bounds error: {any}\n", .{err});
+                                std.debug.print("Task ID out of bounds: {any}\n", .{err});
                             },
                             processError.NoItemIDProvided => {
-                                std.debug.print("No item ID provided. error: {any}\n", .{err});
+                                std.debug.print("No item ID provided: {any}\n", .{err});
                             },
                             processError.InvalidFlagArgs => {
-                                std.debug.print("Invalid flag arguments error: {any}\n", .{err});
+                                std.debug.print("Invalid flag arguments: {any}\n", .{err});
                             },
                             processError.TooManyArgs => {
-                                std.debug.print("Too many flags error: {any}\n", .{err});
+                                std.debug.print("Too many flags provided: {any}\n", .{err});
                             },
                             else => {
                                 std.debug.print("ERROR: {any}\n", .{err});
@@ -458,7 +472,7 @@ pub fn main() !void {
                         }
                         // turn off repl and log help cmd
                         repl_running = false;
-                        try help(null);
+                        help(null);
                     };
                 }
             } else {
@@ -466,44 +480,92 @@ pub fn main() !void {
             }
         }
     } else {
-        std.debug.print("repl not picked!\n", .{});
+        // std.debug.print("repl not picked!\n", .{}); // keep until feature complete
         // here run commands
         _ = parseArgs(args, allocator, &taskList) catch |err| {
-            std.debug.print("error caught: {any}\n", .{err});
+            // std.debug.print("error caught: {any}\n", .{err}); // keep until feature complete
+            std.debug.print("ERROR: ", .{});
             switch (err) {
                 error.InvalidCharacter => {
-                    std.debug.print("ERROR: Provided ItemID is NaN, try again\nItemID provided: {s}\n", .{args[3]});
+                    std.debug.print("Provided ItemID is NaN, try again\nItemID provided: {s}\n", .{args[2]});
                 },
                 error.Overflow => {
-                    std.debug.print("ERROR: Provided ItemID is outside the range of u8, try again\nItemID provided: {s}\n", .{args[3]});
+                    std.debug.print("Provided ItemID is outside the range of u8, try again\nItemID provided: {s}\n", .{args[3]});
                 },
                 processError.InvalidItemID => {
-                    std.debug.print("Invalid item ID, error: {any}, itemID provided: {s}\n", .{ err, args[3] });
+                    std.debug.print("Invalid item ID, itemID provided: {s}\n", .{args[3]});
                 },
                 processError.InvalidDescriptionLength => {
-                    std.debug.print("Invalid description length error: {any}\n", .{err});
+                    std.debug.print("Invalid description length: {any}\n", .{err});
                 },
                 processError.TaskIDOutOfBounds => {
-                    std.debug.print("Task ID out of bounds error: {any}\n", .{err});
+                    std.debug.print("Task ID out of bounds: {any}\n", .{err});
                 },
                 processError.NoItemIDProvided => {
-                    std.debug.print("No item ID provided. error: {any}\n", .{err});
+                    std.debug.print("No item ID provided: {any}\n", .{err});
                 },
                 processError.InvalidFlagArgs => {
-                    std.debug.print("Invalid flag arguments error: {any}\n", .{err});
+                    std.debug.print("Invalid flag arguments: {any}\n", .{err});
                 },
                 processError.TooManyArgs => {
-                    std.debug.print("Too many flags error: {any}\n", .{err});
+                    std.debug.print("Too many flags provided: {any}\n", .{err});
                 },
                 else => {
                     std.debug.print("ERROR: {any}\n", .{err});
                 },
             }
             // log help cmd
-            try help(null);
+            help(null);
         };
     }
 
+    // now we need to overwrite the file with the new task list
+    // first we need to convert the task list to a string
+    var taskListString = std.ArrayList(u8).init(allocator);
+    defer taskListString.deinit();
+    // first append the header
+    try taskListString.appendSlice("ID,Task,Date,Completed\n");
+    for (taskList.items) |task| {
+        // append each part of the task to the string in order
+        const idStr = try std.fmt.allocPrint(allocator, "{d}", .{task.ID});
+        defer allocator.free(idStr);
+        try taskListString.appendSlice(idStr);
+
+        try taskListString.appendSlice(",");
+
+        try taskListString.appendSlice(task.TaskDescription);
+
+        try taskListString.appendSlice(",");
+
+        const creationStr = try std.fmt.allocPrint(allocator, "{d}", .{task.Creation});
+        defer allocator.free(creationStr);
+        try taskListString.appendSlice(creationStr);
+
+        try taskListString.appendSlice(",");
+        // print the completed status of the task and the unparsed version of it
+        std.debug.print("task.Completed: {any} ", .{task.Completed});
+        std.debug.print("unparsed: {s}\n", .{unparseBool(task.Completed)});
+
+        const completedStr = try std.fmt.allocPrint(allocator, "{s}", .{unparseBool(task.Completed)});
+        defer allocator.free(completedStr);
+        try taskListString.appendSlice(completedStr);
+
+        // dont add a new line at the end of the file
+        std.debug.print("task.ID: {d}, taskList.items.len: {d}\n", .{ task.ID, (taskList.items.len) }); // keep until feature complete
+        if (task.ID != taskList.items.len) {
+            try taskListString.appendSlice("\n");
+        }
+    }
+    // seek to the beginning of the file and write the new task list
+    try currentfile.seekTo(0);
+    // then write the string to the file
+    // try currentfile.writer().writeAll(taskListString.items); //TODO: leave until deleting is fixed
+    // debug print the task list string and task list
+    std.debug.print("taskListString: {s}\n", .{taskListString.items});
+    // std.debug.print("taskList: {s}\n", .{taskList.items});
+    try listTasks(taskList, true, null);
+
+    // free the memory of the task descriptions
     for (taskList.items) |task| {
         allocator.free(task.TaskDescription);
     }
